@@ -1,7 +1,1 @@
-{
-  "name": "@sushibirb/spotify-stats",
-  "description": "Injects Spotify Listeners into Artist Pages and Playcounts into Tracklists",
-  "author": "SushiBirb",
-  "version": "1.0.2",
-  "main": "plugin.mjs"
-}
+{"name":"@sushibirb/spotify-stats","description":"Injects Spotify Listeners into Artist Pages and Playcounts into Tracklists","author":"SushiBirb","version":"1.0.3","exports":"./src/index.ts","hash":"QGbU3TnzfJE"}
