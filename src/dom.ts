@@ -1,6 +1,11 @@
-import { getArtistListeners, getTrackPlays } from "./lastfm";
+import { getSpotifyListeners } from "./spotify";
+import { getTrackPlays } from "./lastfm";
 
 const CACHE = new Map<string, string>();
+
+function getSettings() {
+    return localStorage.getItem('spotifystats_mode') || 'replace';
+}
 
 export function setupDOMObserver() {
   const observer = new MutationObserver(() => {
@@ -17,49 +22,74 @@ export function setupDOMObserver() {
 }
 
 async function injectArtistListeners() {
-  // Tidal's "Fans" are typically shown in a specific selector, such as .fans or similar.
-  // We need to find the artist name and the fans element.
-  const artistNameEl = document.querySelector('h1.artist-name, [data-test="artist-title"]');
-  const fansEl = document.querySelector('[data-test="artist-fans"], .fans-count');
-  
-  if (!artistNameEl || !fansEl || fansEl.hasAttribute('data-lastfm-injected')) return;
-  
-  const artistName = artistNameEl.textContent?.trim();
+  const artistNameEl = document.querySelector('h1[data-test="artist-title"], h1.artist-title, [data-test="artist-title"], h1');
+  const artistName = artistNameEl?.textContent?.trim();
   if (!artistName) return;
+
+  // Find the fans element by looking for text "Fans"
+  let fansEl = document.querySelector('[data-test="artist-fans"]');
+  if (!fansEl) {
+    // Fallback: search all divs/spans for "Fans"
+    const elements = document.querySelectorAll('div, span, p');
+    for (const el of Array.from(elements)) {
+      const text = el.textContent?.trim() || '';
+      if (text.match(/^[0-9,KMB.]+\s+Fans$/i)) {
+        fansEl = el as Element;
+        break;
+      }
+    }
+  }
+
+  if (!fansEl || fansEl.hasAttribute('data-lastfm-injected')) return;
+  if (fansEl.textContent?.includes('Listeners')) return; // Already injected
   
-  const cacheKey = `artist:${artistName}`;
+  const cacheKey = `artist_spotify:${artistName}`;
   let listeners = CACHE.get(cacheKey);
   
   if (!listeners) {
-    const data = await getArtistListeners(artistName);
+    CACHE.set(cacheKey, "fetching");
+    fansEl.setAttribute('data-lastfm-injected', 'fetching');
+    const data = await getSpotifyListeners(artistName);
     listeners = data || "N/A";
     CACHE.set(cacheKey, listeners);
+  } else if (listeners === "fetching") {
+    return;
   }
   
   if (listeners !== "N/A") {
-    fansEl.textContent = `${listeners} Listeners (Last.fm)`;
+    const mode = getSettings();
+    const originalText = fansEl.getAttribute('data-original-text') || fansEl.textContent;
+    if (!fansEl.hasAttribute('data-original-text')) {
+      fansEl.setAttribute('data-original-text', originalText || '');
+    }
+    
+    if (mode === 'both') {
+      fansEl.textContent = `${listeners} Listeners | Tidal: ${originalText}`;
+    } else {
+      fansEl.textContent = `${listeners} Listeners`;
+    }
     fansEl.setAttribute('data-lastfm-injected', 'true');
+  } else {
+    fansEl.removeAttribute('data-lastfm-injected');
   }
 }
 
 async function injectTrackPlays() {
-  // Tracks in Tidal albums
-  const trackRows = document.querySelectorAll('[data-test="tracklist-row"]');
+  const trackRows = document.querySelectorAll('[data-test="tracklist-row"], [role="row"]');
   if (trackRows.length === 0) return;
   
-  // Find the album artist
-  const albumArtistEl = document.querySelector('[data-test="album-artist"]');
-  const albumArtist = albumArtistEl?.textContent?.trim();
+  const albumArtistEl = document.querySelector('[data-test="album-artist"], .album-artist');
+  const albumArtist = albumArtistEl?.textContent?.trim() || document.querySelector('h1')?.textContent?.trim();
   if (!albumArtist) return;
   
   for (const row of Array.from(trackRows)) {
     if (row.hasAttribute('data-lastfm-injected')) continue;
     
-    const titleEl = row.querySelector('[data-test="track-title"]');
+    const titleEl = row.querySelector('[data-test="track-title"], [class*="title"]');
     const trackName = titleEl?.textContent?.trim();
     if (!trackName) continue;
     
-    row.setAttribute('data-lastfm-injected', 'pending');
+    row.setAttribute('data-lastfm-injected', 'fetching');
     
     const cacheKey = `track:${albumArtist}:${trackName}`;
     let plays = CACHE.get(cacheKey);
@@ -71,12 +101,12 @@ async function injectTrackPlays() {
     }
     
     if (plays !== "N/A") {
-      // Inject into row
-      const durationEl = row.querySelector('[data-test="track-duration"]');
-      if (durationEl) {
+      const durationEl = row.querySelector('[data-test="track-duration"], [class*="duration"]');
+      if (durationEl && !durationEl.parentElement?.querySelector('.spotify-stats-plays')) {
         const playsSpan = document.createElement('span');
+        playsSpan.className = 'spotify-stats-plays';
         playsSpan.style.marginRight = '15px';
-        playsSpan.style.color = 'var(--text-secondary)';
+        playsSpan.style.color = '#888';
         playsSpan.style.fontSize = '0.9em';
         playsSpan.textContent = `▶ ${plays}`;
         durationEl.parentElement?.insertBefore(playsSpan, durationEl);
