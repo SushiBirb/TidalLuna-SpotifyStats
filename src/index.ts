@@ -4,7 +4,9 @@ import { Settings } from "./settings";
 export const unloads = new Set<any>();
 
 console.log("[Stats Plugin] Initializing...");
-const disconnect = setupDOMObserver();
-unloads.add(disconnect);
+setTimeout(() => {
+    const disconnect = setupDOMObserver();
+    unloads.add(disconnect);
+}, 100);
 
 export { Settings };

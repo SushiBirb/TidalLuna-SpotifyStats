@@ -133,56 +133,49 @@ async function injectTrackPlays() {
   }
 }
 
-// src/settings.ts
-function Settings() {
-  const div = document.createElement("div");
-  div.style.padding = "20px";
-  div.style.color = "white";
-  const h2 = document.createElement("h2");
-  h2.textContent = "Stats Plugin Settings";
-  h2.style.marginBottom = "10px";
-  div.appendChild(h2);
-  const desc = document.createElement("p");
-  desc.textContent = "Choose how you want the stats to appear on Artist pages. Changes require a plugin reload (or restart Tidal). Tracks use Last.fm playcounts because Spotify track counts are private.";
-  desc.style.marginBottom = "20px";
-  div.appendChild(desc);
-  const select = document.createElement("select");
-  select.style.padding = "8px";
-  select.style.backgroundColor = "#222";
-  select.style.color = "white";
-  select.style.border = "1px solid #444";
-  select.style.borderRadius = "4px";
-  const option1 = document.createElement("option");
-  option1.value = "replace";
-  option1.textContent = "Just StatsFM (e.g. 5M Listeners)";
-  const option2 = document.createElement("option");
-  option2.value = "both";
-  option2.textContent = "StatsFM (Tidal) (e.g. 5M Listeners | Tidal: 229K Fans)";
-  select.appendChild(option1);
-  select.appendChild(option2);
-  select.value = localStorage.getItem("spotifystats_mode") || "replace";
-  select.onchange = (e) => {
-    localStorage.setItem("spotifystats_mode", e.target.value);
-  };
-  div.appendChild(select);
-  const reloadBtn = document.createElement("button");
-  reloadBtn.textContent = "Reload to Apply";
-  reloadBtn.style.marginLeft = "10px";
-  reloadBtn.style.padding = "8px 12px";
-  reloadBtn.style.backgroundColor = "#444";
-  reloadBtn.style.color = "white";
-  reloadBtn.style.border = "none";
-  reloadBtn.style.cursor = "pointer";
-  reloadBtn.onclick = () => window.location.reload();
-  div.appendChild(reloadBtn);
-  return div;
+// src/settings.tsx
+import React from "react";
+function getSettings2() {
+  return localStorage.getItem("spotifystats_mode") || "replace";
 }
+function setSettings(mode) {
+  localStorage.setItem("spotifystats_mode", mode);
+}
+var Settings = () => {
+  const [mode, setMode] = React.useState(getSettings2());
+  const handleChange = (e) => {
+    const newMode = e.target.value;
+    setMode(newMode);
+    setSettings(newMode);
+    document.querySelectorAll("[data-lastfm-injected]").forEach((el) => {
+      el.removeAttribute("data-lastfm-injected");
+    });
+  };
+  return /* @__PURE__ */ React.createElement("div", { style: { padding: "20px", color: "white" } }, /* @__PURE__ */ React.createElement("h2", null, "Spotify & Last.fm Stats"), /* @__PURE__ */ React.createElement("p", { style: { marginBottom: "15px" } }, "Choose how you want artist listeners to be displayed:"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: "10px" } }, /* @__PURE__ */ React.createElement("label", null, "Display Mode: "), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: mode,
+      onChange: handleChange,
+      style: {
+        background: "#222",
+        color: "white",
+        border: "1px solid #444",
+        padding: "8px",
+        borderRadius: "4px"
+      }
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "replace" }, "Replace Tidal stats with Spotify stats"),
+    /* @__PURE__ */ React.createElement("option", { value: "both" }, "Show both (Spotify | Tidal)")
+  )), /* @__PURE__ */ React.createElement("p", { style: { marginTop: "20px", fontSize: "0.9em", color: "#888" } }, "Note: You may need to refresh the page or click to another artist for changes to apply."));
+};
 
 // src/index.ts
 var unloads = /* @__PURE__ */ new Set();
 console.log("[Stats Plugin] Initializing...");
-var disconnect = setupDOMObserver();
-unloads.add(disconnect);
+setTimeout(() => {
+  const disconnect = setupDOMObserver();
+  unloads.add(disconnect);
+}, 100);
 export {
   Settings,
   unloads
