@@ -1,17 +1,7 @@
 {
-  "name": "spotifystats",
-  "description": "Replaces Tidal fan counts with Spotify monthly listeners, and adds Spotify play counts.",
-  "author": "Antigravity",
-  "exports": "./src/index.ts",
-  "version": "1.0.0",
-  "main": "dist/index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "license": "ISC",
-  "type": "commonjs",
-  "devDependencies": {
-    "esbuild": "^0.28.1"
-  }
+  "name": "@sushibirb/spotify-stats",
+  "description": "Injects Spotify Listeners into Artist Pages and Playcounts into Tracklists",
+  "author": "SushiBirb",
+  "version": "1.0.2",
+  "main": "plugin.mjs"
 }

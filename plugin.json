@@ -1,7 +1,0 @@
-{
-  "name": "SpotifyStats",
-  "description": "Injects Spotify/Last.fm Listeners into Artist Pages and Playcounts into Tracklists",
-  "author": "SushiBirb",
-  "version": "1.0.1",
-  "main": "plugin.mjs"
-}
