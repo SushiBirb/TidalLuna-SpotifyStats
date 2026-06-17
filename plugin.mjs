@@ -1,129 +1,103 @@
-// src/spotify.ts
-async function getSpotifyArtistListeners(artistName) {
+// src/lastfm.ts
+async function getArtistListeners(artistName) {
   try {
-    const searchRes = await fetch(`https://html.duckduckgo.com/html/?q=site:open.spotify.com/artist+${encodeURIComponent(artistName)}`);
-    const searchHtml = await searchRes.text();
-    const idMatch = searchHtml.match(/open\.spotify\.com\/artist\/([a-zA-Z0-9]+)/);
-    if (!idMatch) return null;
-    const spotifyId = idMatch[1];
-    const spotifyRes = await fetch(`https://open.spotify.com/artist/${spotifyId}`);
-    const spotifyHtml = await spotifyRes.text();
-    const listenersMatch = spotifyHtml.match(/([0-9.,]+[KMB]?)\s+monthly listeners/i);
-    if (listenersMatch) {
-      return listenersMatch[1];
+    const res = await fetch(`https://www.last.fm/music/${encodeURIComponent(artistName)}`);
+    const html = await res.text();
+    const matches = [...html.matchAll(/<abbr class="intabbr[^>]*title="([0-9,]+)"/gi)];
+    if (matches && matches.length > 0) {
+      return matches[0][1];
     }
     return null;
   } catch (err) {
-    console.error("SpotifyStats Plugin Error:", err);
+    console.error("[Stats Plugin] Artist fetch error:", err);
     return null;
   }
 }
-async function getSpotifyTrackPlays(trackName, artistName) {
+async function getTrackPlays(trackName, artistName) {
   try {
-    const searchRes = await fetch(`https://html.duckduckgo.com/html/?q=site:open.spotify.com/track+${encodeURIComponent(trackName + " " + artistName)}`);
-    const searchHtml = await searchRes.text();
-    const idMatch = searchHtml.match(/open\.spotify\.com\/track\/([a-zA-Z0-9]+)/);
-    if (!idMatch) return null;
-    const spotifyId = idMatch[1];
-    const spotifyRes = await fetch(`https://open.spotify.com/track/${spotifyId}`);
-    const spotifyHtml = await spotifyRes.text();
-    const playsMatch = spotifyHtml.match(/"playcount"\s*:\s*"([0-9]+)"/i) || spotifyHtml.match(/"playcount"\s*:\s*([0-9]+)/i);
-    if (playsMatch) {
-      const num = parseInt(playsMatch[1], 10);
-      return num.toLocaleString();
+    const res = await fetch(`https://www.last.fm/music/${encodeURIComponent(artistName)}/_/${encodeURIComponent(trackName)}`);
+    const html = await res.text();
+    const matches = [...html.matchAll(/<abbr class="intabbr[^>]*title="([0-9,]+)"/gi)];
+    if (matches && matches.length > 1) {
+      return matches[1][1];
     }
     return null;
   } catch (err) {
-    console.error("SpotifyStats Plugin Error:", err);
+    console.error("[Stats Plugin] Track fetch error:", err);
     return null;
   }
 }
 
 // src/dom.ts
-var cache = {};
-function startObserver() {
-  const observer = new MutationObserver(async (mutations) => {
-    const elements = document.evaluate(
-      "//*[contains(text(), 'Fans')]",
-      document,
-      null,
-      XPathResult.UNORDERED_NODE_SNAPSHOT_TYPE,
-      null
-    );
-    for (let i = 0; i < elements.snapshotLength; i++) {
-      const el = elements.snapshotItem(i);
-      if (el && el.innerText && el.innerText.includes("Fans") && !el.dataset.spotifyStats) {
-        let artistName = document.title.replace(" on TIDAL", "").trim();
-        el.dataset.spotifyStats = "true";
-        const cacheKey = `artist:${artistName}`;
-        let listeners = cache[cacheKey];
-        if (!listeners) {
-          listeners = await getSpotifyArtistListeners(artistName) || "N/A";
-          cache[cacheKey] = listeners;
-        }
-        if (listeners !== "N/A") {
-          el.innerText = `${el.innerText} | ${listeners} Spotify Listeners`;
-        }
-      }
-    }
-    const trackRows = document.querySelectorAll('[data-test="tracklist-row"]');
-    for (let row of Array.from(trackRows)) {
-      const rowEl = row;
-      if (!rowEl.dataset.spotifyStats) {
-        rowEl.dataset.spotifyStats = "true";
-        const titleEl = rowEl.querySelector('[data-test="table-row-title"]');
-        let artistName = document.title.split(" by ")[1]?.replace(" on TIDAL", "") || document.title.replace(" on TIDAL", "");
-        if (titleEl && titleEl.textContent) {
-          const trackName = titleEl.textContent.trim();
-          const cacheKey = `track:${artistName}:${trackName}`;
-          let plays = cache[cacheKey];
-          if (!plays) {
-            getSpotifyTrackPlays(trackName, artistName).then((fetchedPlays) => {
-              if (fetchedPlays) {
-                cache[cacheKey] = fetchedPlays;
-                const durationEl = rowEl.querySelector('[data-test="duration"]') || titleEl;
-                if (durationEl) {
-                  const span = document.createElement("span");
-                  span.style.color = "#1db954";
-                  span.style.fontSize = "0.85em";
-                  span.style.marginLeft = "10px";
-                  span.textContent = `\u25B6 ${fetchedPlays}`;
-                  durationEl.appendChild(span);
-                }
-              } else {
-                cache[cacheKey] = "N/A";
-              }
-            });
-          } else if (plays !== "N/A") {
-            const durationEl = rowEl.querySelector('[data-test="duration"]') || titleEl;
-            if (durationEl) {
-              const span = document.createElement("span");
-              span.style.color = "#1db954";
-              span.style.fontSize = "0.85em";
-              span.style.marginLeft = "10px";
-              span.textContent = `\u25B6 ${plays}`;
-              durationEl.appendChild(span);
-            }
-          }
-        }
-      }
-    }
+var CACHE = /* @__PURE__ */ new Map();
+function setupDOMObserver() {
+  const observer = new MutationObserver(() => {
+    injectArtistListeners();
+    injectTrackPlays();
   });
   observer.observe(document.body, {
     childList: true,
-    subtree: true,
-    characterData: true
+    subtree: true
   });
-  return observer;
+  return () => observer.disconnect();
+}
+async function injectArtistListeners() {
+  const artistNameEl = document.querySelector('h1.artist-name, [data-test="artist-title"]');
+  const fansEl = document.querySelector('[data-test="artist-fans"], .fans-count');
+  if (!artistNameEl || !fansEl || fansEl.hasAttribute("data-lastfm-injected")) return;
+  const artistName = artistNameEl.textContent?.trim();
+  if (!artistName) return;
+  const cacheKey = `artist:${artistName}`;
+  let listeners = CACHE.get(cacheKey);
+  if (!listeners) {
+    const data = await getArtistListeners(artistName);
+    listeners = data || "N/A";
+    CACHE.set(cacheKey, listeners);
+  }
+  if (listeners !== "N/A") {
+    fansEl.textContent = `${listeners} Listeners (Last.fm)`;
+    fansEl.setAttribute("data-lastfm-injected", "true");
+  }
+}
+async function injectTrackPlays() {
+  const trackRows = document.querySelectorAll('[data-test="tracklist-row"]');
+  if (trackRows.length === 0) return;
+  const albumArtistEl = document.querySelector('[data-test="album-artist"]');
+  const albumArtist = albumArtistEl?.textContent?.trim();
+  if (!albumArtist) return;
+  for (const row of Array.from(trackRows)) {
+    if (row.hasAttribute("data-lastfm-injected")) continue;
+    const titleEl = row.querySelector('[data-test="track-title"]');
+    const trackName = titleEl?.textContent?.trim();
+    if (!trackName) continue;
+    row.setAttribute("data-lastfm-injected", "pending");
+    const cacheKey = `track:${albumArtist}:${trackName}`;
+    let plays = CACHE.get(cacheKey);
+    if (!plays) {
+      const data = await getTrackPlays(trackName, albumArtist);
+      plays = data || "N/A";
+      CACHE.set(cacheKey, plays);
+    }
+    if (plays !== "N/A") {
+      const durationEl = row.querySelector('[data-test="track-duration"]');
+      if (durationEl) {
+        const playsSpan = document.createElement("span");
+        playsSpan.style.marginRight = "15px";
+        playsSpan.style.color = "var(--text-secondary)";
+        playsSpan.style.fontSize = "0.9em";
+        playsSpan.textContent = `\u25B6 ${plays}`;
+        durationEl.parentElement?.insertBefore(playsSpan, durationEl);
+      }
+    }
+    row.setAttribute("data-lastfm-injected", "true");
+  }
 }
 
 // src/index.ts
 var unloads = /* @__PURE__ */ new Set();
-setTimeout(() => {
-  const observer = startObserver();
-  unloads.add(() => observer.disconnect());
-  console.log("[SpotifyStats] Plugin loaded and observer started");
-}, 1e3);
+console.log("[Stats Plugin] Initializing...");
+var disconnect = setupDOMObserver();
+unloads.add(disconnect);
 export {
   unloads
 };

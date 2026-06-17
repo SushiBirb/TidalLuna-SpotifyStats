@@ -1,9 +1,7 @@
-import { startObserver } from "./dom";
+import { setupDOMObserver } from "./dom";
 
-export const unloads = new Set<() => void>();
+export const unloads = new Set<any>();
 
-setTimeout(() => {
-    const observer = startObserver();
-    unloads.add(() => observer.disconnect());
-    console.log("[SpotifyStats] Plugin loaded and observer started");
-}, 1000);
+console.log("[Stats Plugin] Initializing...");
+const disconnect = setupDOMObserver();
+unloads.add(disconnect);

@@ -19,7 +19,7 @@ export async function getTrackPlays(trackName: string, artistName: string): Prom
     const html = await res.text();
     const matches = [...html.matchAll(/<abbr class="intabbr[^>]*title="([0-9,]+)"/gi)];
     if (matches && matches.length > 1) {
-      return matches[1][1]; // Second one is scrobbles (plays)
+      return matches[1][1]; // Second one is scrobbles
     }
     return null;
   } catch (err) {
